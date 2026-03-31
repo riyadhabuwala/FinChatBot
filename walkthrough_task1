@@ -1,0 +1,102 @@
+# FinChatBot — Part 1: React Frontend Walkthrough
+
+## Summary
+
+Built the complete React frontend for **FinChatBot**, an AI-powered financial assistant with 4 interaction modes, chat streaming, chart rendering, file uploads, voice input, and document export.
+
+## Stitch Design
+
+Created 6 design screens in Stitch project `12610157595259334099`:
+1. Main App Shell (sidebar + chat layout)
+2. Chat Message Area (user/AI bubbles, citations, charts)
+3. File Upload Modal (drag-and-drop zone)
+4. Bottom Input Bar (text, voice, attach)
+5. Insights Mode (scan button + insight cards grid)
+6. Agentic Mode (goal input + agent stepper)
+
+## Architecture
+
+| Layer | Tech |
+|-------|------|
+| Framework | Vite + React 19 |
+| Styling | Tailwind CSS v4 (dark theme) |
+| State | Zustand |
+| Charts | Recharts |
+| Icons | Lucide React |
+| Dialogs | Radix UI |
+| File Upload | react-dropzone |
+| Export | jsPDF, Blob API |
+
+## Features Verified
+
+````carousel
+### ✅ Smart Chat Mode
+- Streaming AI responses (word-by-word, 35ms delay)
+- Markdown rendering (bold, headers, lists)
+- Citation pills with Radix tooltips
+- Auto-embedded bar charts via Recharts
+- Auto-scroll with manual override
+
+![Smart Chat with streaming response and chart](C:\Users\Riya\.gemini\antigravity\brain\a24ce31e-51b1-4bf0-86eb-28bef413d7d4\chat_response_chart_1774937758941.png)
+<!-- slide -->
+### ✅ Insights Mode
+- "Scan Documents" button with loading skeleton
+- 4 severity-coded insight cards (positive/warning/critical)
+- Metric badges and change indicators
+- Falls back to chat for follow-up questions
+
+![Insights Mode with 4 severity-coded cards](C:\Users\Riya\.gemini\antigravity\brain\a24ce31e-51b1-4bf0-86eb-28bef413d7d4\insights_mode_scanned_1774937811456.png)
+<!-- slide -->
+### ✅ Agentic Mode
+- Goal textarea with "Run Agent" button
+- Vertical stepper: Planner → Analyst → Writer → Critic
+- Steps complete sequentially (2s delay each)
+- Final executive summary with markdown rendering
+- Toast notification on completion
+
+![Agentic Mode with completed agent steps](C:\Users\Riya\.gemini\antigravity\brain\a24ce31e-51b1-4bf0-86eb-28bef413d7d4\agentic_mode_completed_1774937921802.png)
+<!-- slide -->
+### ✅ File Upload Modal
+- Drag-and-drop with react-dropzone
+- Format pills (PDF, CSV, XLSX, JSON, TXT)
+- Upload progress simulation (1.5s)
+- File list with status icons and delete
+
+![Upload Documents modal](C:\Users\Riya\.gemini\antigravity\brain\a24ce31e-51b1-4bf0-86eb-28bef413d7d4\file_upload_modal_1774937938910.png)
+````
+
+## File Structure
+
+```
+src/
+├── components/
+│   ├── layout/        → AppShell, Sidebar, TopBar
+│   ├── chat/          → ChatWindow, MessageBubble, CitationTag, StreamingIndicator, ChatInput
+│   ├── upload/        → FileUploadModal, FileDropZone, UploadedFilesList
+│   ├── charts/        → ChartRenderer (bar, line, pie, scatter)
+│   ├── modes/         → SmartChatMode, DocumentAnalysisMode, InsightsMode, AgenticMode
+│   └── ui/            → Button, Badge, Card, Toast
+├── hooks/             → useStream, useVoiceInput, useFileUpload, useChat
+├── store/             → useChatStore (Zustand)
+├── utils/             → exportPDF, exportMarkdown, mockData
+├── constants/         → modes
+├── App.tsx
+└── main.tsx
+```
+
+## Additional Features
+- **Voice Input**: Web Speech API (Chrome/Edge), mic glow animation
+- **PDF Export**: jsPDF with formatted title page, messages, citations
+- **Markdown Export**: Structured export with footnote citations
+- **Keyboard Shortcuts**: Ctrl+K focuses input, Escape closes modals
+- **Responsive**: Sidebar collapses on mobile, overlay mode
+- **Toast Notifications**: Success/error/info with auto-dismiss
+- **Smart Auto-scroll**: Stops when user scrolls up, resumes at bottom
+
+## Running
+
+```bash
+cd c:\Users\Riya\OneDrive\Desktop\nirma\finchatbot
+npm run dev
+# Opens at http://localhost:5173/
+```
