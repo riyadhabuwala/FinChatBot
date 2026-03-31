@@ -72,15 +72,25 @@ export function MessageBubble({ role, content, citations, chartData, isStreaming
 
         {/* Citations */}
         {citations && citations.length > 0 && !isStreaming && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="flex flex-wrap mt-2 pt-2 border-t border-border-subtle">
             {citations.map((c, i) => (
-              <CitationTag key={i} file={c.file} page={c.page} />
+              <CitationTag
+                key={i}
+                fileId={c.fileId}
+                filename={c.filename}
+                page={c.page}
+                section={c.section}
+              />
             ))}
           </div>
         )}
 
         {/* Chart */}
-        {chartData && !isStreaming && <ChartRenderer chartData={chartData} />}
+        {chartData && !isStreaming && (
+          <div className="mt-3">
+            <ChartRenderer chartData={chartData} />
+          </div>
+        )}
       </div>
     </div>
   );

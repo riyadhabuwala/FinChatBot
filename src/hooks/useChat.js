@@ -72,8 +72,9 @@ export function useChat() {
           },
           onDone: (metadata) => {
             updateLastMessage(activeMode, {
-              citations: metadata?.citations || null,
-              chartData: metadata?.chartData || null,
+              content: metadata?.fullText ?? undefined,
+              citations: metadata?.citations ?? [],
+              chartData: metadata?.chartData ?? null,
               isStreaming: false,
             });
             setStreaming(false);

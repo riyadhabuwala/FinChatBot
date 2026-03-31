@@ -135,6 +135,7 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
 
           clearInterval(pingInterval);
           sendDone(res, {
+            fullText,
             citations,
             chartData,
             mode,

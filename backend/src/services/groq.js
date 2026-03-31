@@ -113,15 +113,29 @@ export async function callGroq(messages, model = 'fast') {
  * Extract [CITATION:filename:page] or [CITATION:filename:page:section] tags.
  */
 export function extractCitations(text) {
-  const citationRegex = /\[CITATION:([^:\]]+):(\d+)(?::([^\]]+))?\]/g;
+  const citationRegex = /\[CITATION:([^\]]+)\]/g;
   const citations = [];
   let match;
 
   while ((match = citationRegex.exec(text)) !== null) {
+    const raw = match[1];
+    const colonParts = raw.split(':');
+    const fileId = colonParts[0] || '';
+    const rawPage = colonParts[1] || '1';
+    const section = colonParts[2] || null;
+
+    const filenameParts = fileId.split('-');
+    const filename = filenameParts.length > 5
+      ? filenameParts.slice(5).join('-')
+      : fileId;
+
+    const page = rawPage.replace(/^Page\s*/i, '');
+
     citations.push({
-      file: match[1],
-      page: parseInt(match[2]),
-      section: match[3] || null,
+      fileId,
+      filename,
+      page,
+      section,
     });
   }
 
@@ -133,20 +147,27 @@ export function extractCitations(text) {
  * Extract [CHART:{...}] tag and parse the JSON chart spec.
  */
 export function extractChartData(text) {
-  const chartRegex = /\[CHART:(\{[\s\S]*?\})\]/;
-  const match = chartRegex.exec(text);
-
-  if (!match) {
+  const tagStart = text.lastIndexOf('[CHART:');
+  if (tagStart === -1) {
     return { cleanText: text, chartData: null };
   }
 
+  const tagEnd = text.lastIndexOf(']');
+  if (tagEnd <= tagStart) {
+    return { cleanText: text, chartData: null };
+  }
+
+  const raw = text.slice(tagStart + '[CHART:'.length, tagEnd).trim();
+  const cleanText = (text.slice(0, tagStart) + text.slice(tagEnd + 1)).trim();
+
   try {
-    const chartData = JSON.parse(match[1]);
-    const cleanText = text.replace(chartRegex, '').trim();
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonText = jsonMatch ? jsonMatch[0] : raw;
+    const chartData = JSON.parse(jsonText);
     return { cleanText, chartData };
   } catch (err) {
     logger.warn('Failed to parse chart JSON:', err.message);
-    return { cleanText: text, chartData: null };
+    return { cleanText, chartData: null };
   }
 }
 

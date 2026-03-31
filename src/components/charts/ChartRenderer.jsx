@@ -64,7 +64,7 @@ export function ChartRenderer({ chartData }) {
     return (
       <Card className="mt-3 p-3">
         <p className="text-xs font-semibold text-text-primary mb-3">{title}</p>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid {...gridStyle} />
             <XAxis dataKey="name" tick={axisStyle} axisLine={{ stroke: '#30363D' }} />
@@ -97,7 +97,7 @@ export function ChartRenderer({ chartData }) {
     return (
       <Card className="mt-3 p-3">
         <p className="text-xs font-semibold text-text-primary mb-3">{title}</p>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={280}>
           <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid {...gridStyle} />
             <XAxis dataKey="name" tick={axisStyle} axisLine={{ stroke: '#30363D' }} />
@@ -132,7 +132,7 @@ export function ChartRenderer({ chartData }) {
     return (
       <Card className="mt-3 p-3">
         <p className="text-xs font-semibold text-text-primary mb-3">{title}</p>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={280}>
           <PieChart>
             <Pie
               data={data}
@@ -162,7 +162,7 @@ export function ChartRenderer({ chartData }) {
     return (
       <Card className="mt-3 p-3">
         <p className="text-xs font-semibold text-text-primary mb-3">{title}</p>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={280}>
           <ScatterChart margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid {...gridStyle} />
             <XAxis dataKey="x" tick={axisStyle} axisLine={{ stroke: '#30363D' }} />
