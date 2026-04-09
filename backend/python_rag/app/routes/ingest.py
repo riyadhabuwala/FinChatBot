@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.rag.ingestion import ingest_file
 from app.rag.embedder import embed_texts
-from app.rag.vector_store import add_to_index
-from app.rag.bm25_store import add_to_bm25
+from app.rag.vector_store import add_to_index, remove_file_from_index
+from app.rag.bm25_store import add_to_bm25, remove_file_from_bm25
 import os
 
 router = APIRouter()
@@ -13,6 +13,11 @@ class IngestRequest(BaseModel):
     file_path: str
     file_id: str
     filename: str
+    user_id: str
+
+
+class DeleteRequest(BaseModel):
+    file_id: str
     user_id: str
 
 
@@ -38,4 +43,18 @@ async def ingest_document(req: IngestRequest):
         "filename": req.filename,
         "chunk_count": len(chunks),
         "status": "ingested",
+    }
+
+
+@router.post("/delete")
+async def delete_document(req: DeleteRequest):
+    """Remove a file's chunks from all indexes."""
+    faiss_removed = remove_file_from_index(req.user_id, req.file_id)
+    bm25_removed = remove_file_from_bm25(req.user_id, req.file_id)
+
+    return {
+        "file_id": req.file_id,
+        "faiss_chunks_removed": faiss_removed,
+        "bm25_chunks_removed": bm25_removed,
+        "status": "deleted",
     }

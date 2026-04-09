@@ -2,6 +2,7 @@ import { CitationTag } from './CitationTag';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { StreamingIndicator } from './StreamingIndicator';
 import { User, Bot } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 function renderMarkdown(text) {
   if (!text) return '';
@@ -24,7 +25,7 @@ function renderMarkdown(text) {
     .replace(/\n\n/g, '</p><p class="mt-2">')
     .replace(/\n/g, '<br/>');
 
-  return `<p>${html}</p>`;
+  return DOMPurify.sanitize(`<p>${html}</p>`, { ADD_ATTR: ['class'] });
 }
 
 export function MessageBubble({ role, content, citations, chartData, isStreaming }) {

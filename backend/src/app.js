@@ -10,6 +10,7 @@ import chatRoutes from './routes/chat.js';
 import uploadRoutes from './routes/upload.js';
 import insightsRoutes from './routes/insights.js';
 import agentRoutes from './routes/agent.js';
+import { isPythonAvailable } from './services/pythonClient.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
 
@@ -41,13 +42,14 @@ app.use(cookieParser());
 app.use(morgan('dev'));
 
 // Health check — no auth required
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const pythonUp = await isPythonAvailable();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     services: {
       node: true,
-      python: true, // will be true once Part 3 is built
+      python: pythonUp,
     },
   });
 });

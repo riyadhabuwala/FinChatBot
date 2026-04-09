@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Play, CheckCircle, Loader, Clock, AlertCircle, ChevronDown, ChevronUp, Bot } from 'lucide-react';
 import { Card } from '../ui/Card';
+import { ChartRenderer } from '../charts/ChartRenderer';
 import { Button } from '../ui/Button';
 import useChatStore from '../../store/useChatStore';
 import { mockAgentSteps, mockChatResponses } from '../../utils/mockData';
@@ -80,6 +81,8 @@ export function AgenticMode() {
   const { agentSteps, setAgentSteps, updateAgentStep, addAgentStep, addToast, uploadedFiles } = useChatStore();
   const [isRunning, setIsRunning] = useState(false);
   const [finalOutput, setFinalOutput] = useState('');
+  const [charts, setCharts] = useState([]);
+  const safeAgentSteps = Array.isArray(agentSteps) ? agentSteps : [];
   const timeoutRefs = useRef([]);
   const abortControllerRef = useRef(null);
 
@@ -94,6 +97,7 @@ export function AgenticMode() {
   const handleRunMock = useCallback(() => {
     setIsRunning(true);
     setFinalOutput('');
+    setCharts([]);
 
     const steps = mockAgentSteps.map((s) => ({ ...s, status: 'pending', output: '' }));
     setAgentSteps(steps);
@@ -120,10 +124,12 @@ export function AgenticMode() {
   const handleRunReal = useCallback(async () => {
     setIsRunning(true);
     setFinalOutput('');
+    setCharts([]);
     setAgentSteps([]);
 
     const fileIds = uploadedFiles.filter((f) => f.status === 'ready').map((f) => f.id);
     const token = useChatStore.getState().authToken;
+    console.log('Sending to agent:', { goal, fileIds });
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -205,12 +211,44 @@ export function AgenticMode() {
         break;
       }
       case 'report_chunk': {
-        setFinalOutput(data.text || '');
+        if (data.text) {
+          setFinalOutput((prev) => prev + data.text);
+        }
+        break;
+      }
+      case 'agent_task_done': {
+        const stepId = 'step-2';
+        const currentSteps = useChatStore.getState().agentSteps;
+        const existing = currentSteps.find((s) => s.id === stepId);
+        const prefix = existing?.output ? `${existing.output}\n` : '';
+        useChatStore.getState().updateAgentStep(stepId, {
+          output: `${prefix}- ${data.description}`,
+        });
         break;
       }
       case 'agent_done': {
         setFinalOutput(data.report || '');
+        const nextCharts = Array.isArray(data.chartData)
+          ? data.chartData
+          : data.chartData
+            ? [data.chartData]
+            : [];
+        setCharts(nextCharts);
         addToast({ type: 'success', message: 'Agent completed all tasks' });
+        break;
+      }
+      case 'agent_error': {
+        const errorMessage = data.message || 'Agent error';
+        addToast({ type: 'error', message: errorMessage });
+        const steps = useChatStore.getState().agentSteps;
+        const nextSteps = Array.isArray(steps)
+          ? steps.map((s) => (
+            s.status === 'pending' || s.status === 'running'
+              ? { ...s, status: 'error', output: errorMessage }
+              : s
+          ))
+          : [];
+        setAgentSteps(nextSteps);
         break;
       }
       case 'error': {
@@ -263,15 +301,15 @@ export function AgenticMode() {
         </Card>
 
         {/* Agent steps tracker */}
-        {agentSteps.length > 0 && (
+        {safeAgentSteps.length > 0 && (
           <Card className="mb-5">
             <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
               <Bot size={16} className="text-mode-agent" />
               Agent Progress
             </h3>
             <div>
-              {agentSteps.map((step, i) => (
-                <AgentStep key={step.id} step={step} isLast={i === agentSteps.length - 1} />
+              {safeAgentSteps.map((step, i) => (
+                <AgentStep key={step.id} step={step} isLast={i === safeAgentSteps.length - 1} />
               ))}
             </div>
           </Card>
@@ -297,11 +335,18 @@ export function AgenticMode() {
                   .replace(/\n/g, '<br/>'),
               }}
             />
+            {charts.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {charts.map((chart, i) => (
+                  <ChartRenderer key={i} chartData={chart} />
+                ))}
+              </div>
+            )}
           </Card>
         )}
 
         {/* Empty state */}
-        {agentSteps.length === 0 && !finalOutput && (
+        {safeAgentSteps.length === 0 && !finalOutput && (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-2xl bg-mode-agent/15 mx-auto mb-4 flex items-center justify-center">
               <Bot size={28} className="text-mode-agent" />

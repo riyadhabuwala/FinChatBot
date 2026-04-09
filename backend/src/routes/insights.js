@@ -95,7 +95,8 @@ ${SYSTEM_PROMPTS.insights}`;
 
 // GET /api/insights/history
 router.get('/history', optionalAuth, async (req, res) => {
-  const result = await getLastInsights(req.user.id);
+  const userId = req.user?.id || 'demo';
+  const result = await getLastInsights(userId);
   res.json(result || { insights: [], generatedAt: null });
 });
 

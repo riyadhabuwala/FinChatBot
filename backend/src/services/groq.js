@@ -81,7 +81,13 @@ export async function streamChatResponse(messages, mode, onChunk, onDone) {
     const delta = chunk.choices?.[0]?.delta?.content;
     if (delta) {
       fullText += delta;
-      onChunk(fullText);
+      // Strip raw tags during streaming so users don't see [CITATION:...], [CHART:...] etc.
+      const displayText = fullText
+        .replace(/\[CITATION:[^\]]*\]/g, '')
+        .replace(/\[CHART:\{[\s\S]*$/m, '')  // strip partial/full chart tags
+        .replace(/\[INSIGHTS:\[[\s\S]*$/m, '')  // strip partial/full insights tags
+        .trim();
+      onChunk(displayText);
     }
   }
 

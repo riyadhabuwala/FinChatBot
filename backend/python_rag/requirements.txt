@@ -5,6 +5,8 @@ aiofiles
 langchain
 langchain-community
 langchain-groq
+langchain-core
+langgraph
 sentence-transformers
 faiss-cpu
 rank-bm25
@@ -16,4 +18,8 @@ pydantic
 pydantic-settings
 numpy
 scikit-learn
-tiktoken
+matplotlib
+seaborn
+kaleido
+plotly
+restrictedpython

@@ -7,8 +7,8 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 export function useChat() {
-  const { activeMode, conversations, addMessage, updateLastMessage, isStreaming, setStreaming, uploadedFiles, addToast } = useChatStore();
-  const { startStream, stopStream } = useStream();
+  const { activeMode, conversations, addMessage, updateLastMessage, uploadedFiles, addToast } = useChatStore();
+  const { startStream, stopStream, isStreaming } = useStream();
   const responseIndexRef = useRef({});
 
   const messages = conversations[activeMode] || [];
@@ -34,8 +34,6 @@ export function useChat() {
         isStreaming: true,
       });
 
-      setStreaming(true);
-
       if (USE_MOCK) {
         // ── Mock path ──
         const modeResponses = mockChatResponses[activeMode] || mockChatResponses.smart_chat;
@@ -54,7 +52,6 @@ export function useChat() {
               chartData: mockResponse.chartData || null,
               isStreaming: false,
             });
-            setStreaming(false);
           },
           metadata: { citations: mockResponse.citations, chartData: mockResponse.chartData },
         });
@@ -77,20 +74,18 @@ export function useChat() {
               chartData: metadata?.chartData ?? null,
               isStreaming: false,
             });
-            setStreaming(false);
           },
           onError: (errorMsg) => {
             updateLastMessage(activeMode, {
               content: `⚠️ ${errorMsg || 'Failed to get AI response. Please check the backend is running.'}`,
               isStreaming: false,
             });
-            setStreaming(false);
             addToast({ type: 'error', message: errorMsg || 'Chat stream failed' });
           },
         });
       }
     },
-    [activeMode, isStreaming, addMessage, updateLastMessage, setStreaming, startStream, uploadedFiles, addToast],
+    [activeMode, isStreaming, addMessage, updateLastMessage, startStream, uploadedFiles, addToast],
   );
 
   const clearChat = useCallback(async () => {

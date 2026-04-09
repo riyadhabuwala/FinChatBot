@@ -107,3 +107,66 @@ export async function runInsightsAnalysis(fileIds, filePaths, userId = 'demo') {
     return { stats: {}, context: '', sources: [] };
   }
 }
+
+/**
+ * Delete a file's chunks from the Python RAG indexes.
+ * If Python unavailable: returns gracefully.
+ */
+export async function deleteFromIndex(fileId, userId = 'demo') {
+  try {
+    const available = await isPythonAvailable();
+    if (!available) {
+      logger.warn(`Python unavailable — skipping index cleanup for file ${fileId}`);
+      return { status: 'skipped', message: 'Python service unavailable' };
+    }
+
+    const response = await pythonClient.post('/ingest/delete', {
+      file_id: fileId,
+      user_id: userId,
+    });
+    logger.info(`Deleted file ${fileId} from indexes: ${JSON.stringify(response.data)}`);
+    return response.data;
+  } catch (err) {
+    logger.error(`Failed to delete file ${fileId} from indexes:`, err.message);
+    return { status: 'error', message: err.message };
+  }
+}
+
+/**
+ * Run the Python LangGraph agent pipeline.
+ * Returns a fetch Response for SSE proxying, or null if unavailable.
+ */
+export async function runAgentPipeline(goal, fileIds, userId = 'demo', filePaths = []) {
+  // Step 1: verify Python is up before attempting stream
+  const pythonUp = await isPythonAvailable();
+  if (!pythonUp) {
+    logger.warn('runAgentPipeline: Python service unreachable');
+    return null;
+  }
+
+  try {
+    // Step 2: use native fetch -- do NOT use axios here (axios doesn't stream SSE)
+    const response = await fetch(`${process.env.PYTHON_SERVICE_URL}/agent/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goal,
+        file_ids: fileIds,
+        user_id: userId,
+        file_paths: filePaths,
+      }),
+      // No timeout here -- agent can take 60-120s for complex goals
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      logger.error(`runAgentPipeline: Python returned ${response.status}: ${errText}`);
+      return null;
+    }
+
+    return response; // return raw Response so caller can stream its body
+  } catch (err) {
+    logger.error(`runAgentPipeline: fetch failed -- ${err.message}`);
+    return null;
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MODE_LIST, getModeById } from '../../constants/modes';
 import useChatStore from '../../store/useChatStore';
+import { useFileUpload } from '../../hooks/useFileUpload';
 import { Button } from '../ui/Button';
 
 const ICON_MAP = {
@@ -40,8 +41,9 @@ function formatFileSize(bytes) {
 }
 
 export function Sidebar() {
-  const { activeMode, setActiveMode, uploadedFiles, removeFile, setUploadModalOpen, isSidebarOpen, setSidebarOpen } =
+  const { activeMode, setActiveMode, uploadedFiles, setUploadModalOpen, isSidebarOpen, setSidebarOpen } =
     useChatStore();
+  const { removeFile: handleRemoveFile } = useFileUpload();
 
   return (
     <>
@@ -162,7 +164,7 @@ export function Sidebar() {
                         </div>
                         <button
                           className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer p-0.5 hover:text-severity-critical text-text-muted"
-                          onClick={() => removeFile(file.id)}
+                          onClick={() => handleRemoveFile(file.id)}
                           aria-label={`Remove ${file.name}`}
                         >
                           <X size={12} />

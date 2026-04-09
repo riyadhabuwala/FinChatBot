@@ -8,7 +8,7 @@ import { uploadLimiter } from '../middleware/rateLimit.js';
 import { sanitizeFilename } from '../utils/fileValidator.js';
 import { logger } from '../utils/logger.js';
 import { addUploadedFile, getUploadedFiles, removeUploadedFile, updateUploadedFile } from '../services/sessionStore.js';
-import { ingestFile } from '../services/pythonClient.js';
+import { ingestFile, deleteFromIndex } from '../services/pythonClient.js';
 
 const router = Router();
 
@@ -77,9 +77,11 @@ router.post('/', optionalAuth, uploadLimiter, upload.array('files', 5), async (r
         size: file.size,
         type: file.mimetype,
         path: absolutePath,
+        ragProcessed: false,
       };
 
       await addUploadedFile(userId, fileMetadata);
+      logger.info(`upload: saved file metadata with path=${absolutePath}`);
 
       // Attempt RAG ingestion (graceful if Python is down)
       const ingestionResult = await ingestFile(absolutePath, fileId, file.originalname, userId);
@@ -120,7 +122,7 @@ router.post('/', optionalAuth, uploadLimiter, upload.array('files', 5), async (r
 // DELETE /api/upload/:fileId
 router.delete('/:fileId', optionalAuth, async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?.id || 'demo';
     const { fileId } = req.params;
 
     const files = await getUploadedFiles(userId);
@@ -135,6 +137,9 @@ router.delete('/:fileId', optionalAuth, async (req, res, next) => {
       fs.unlinkSync(file.path);
     }
 
+    // Delete from RAG indexes (graceful if Python is down)
+    await deleteFromIndex(fileId, userId);
+
     await removeUploadedFile(userId, fileId);
     logger.info(`File deleted: ${fileId} by user ${userId}`);
 
@@ -146,7 +151,7 @@ router.delete('/:fileId', optionalAuth, async (req, res, next) => {
 
 // GET /api/upload/files
 router.get('/files', optionalAuth, async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user?.id || 'demo';
   const files = (await getUploadedFiles(userId)).map(f => ({
     id: f.id,
     name: f.name,

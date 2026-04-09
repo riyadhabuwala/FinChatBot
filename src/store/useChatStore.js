@@ -1,9 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import { mockUploadedFiles } from '../utils/mockData';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+
+// Lazy-load mock data only when needed (avoids bundling in production)
+let _mockFiles = null;
+const getMockFiles = async () => {
+  if (!_mockFiles) {
+    const { mockUploadedFiles } = await import('../utils/mockData');
+    _mockFiles = mockUploadedFiles;
+  }
+  return _mockFiles;
+};
 
 const useChatStore = create(persist((set, get) => ({
   // Current active mode
@@ -14,8 +23,8 @@ const useChatStore = create(persist((set, get) => ({
   authToken: null,
   setAuthToken: (token) => set({ authToken: token }),
 
-  // Uploaded files — use mock if VITE_USE_MOCK=true
-  uploadedFiles: USE_MOCK ? [...mockUploadedFiles] : [],
+  // Uploaded files — mock files loaded asynchronously if needed
+  uploadedFiles: [],
   addFile: (file) =>
     set((state) => ({
       uploadedFiles: [
@@ -106,5 +115,14 @@ const useChatStore = create(persist((set, get) => ({
     conversations: state.conversations,
   }),
 }));
+
+// Initialize mock files lazily if USE_MOCK is enabled
+if (USE_MOCK) {
+  getMockFiles().then((files) => {
+    if (useChatStore.getState().uploadedFiles.length === 0) {
+      useChatStore.getState().setFiles([...files]);
+    }
+  });
+}
 
 export default useChatStore;

@@ -1,4 +1,3 @@
-import { Redis } from '@upstash/redis';
 import { logger } from '../utils/logger.js';
 
 // ─── Client Setup ─────────────────────────────────────────────────────────────
@@ -9,11 +8,18 @@ const USE_REDIS =
 
 let redis = null;
 if (USE_REDIS) {
-  redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
-  logger.info('Session store: Upstash Redis (persistent)');
+  try {
+    const { Redis } = await import('@upstash/redis');
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+    logger.info('Session store: Upstash Redis (persistent)');
+  } catch (err) {
+    logger.warn(`Failed to load @upstash/redis: ${err.message}`);
+    logger.warn('Install it with: npm install @upstash/redis');
+    logger.warn('Falling back to in-memory session store.');
+  }
 } else {
   logger.warn('Session store: in-memory fallback (data lost on restart).');
   logger.info('Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for persistence.');

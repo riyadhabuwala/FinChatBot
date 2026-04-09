@@ -165,8 +165,10 @@ router.post('/clear', optionalAuth, async (req, res) => {
     return res.status(400).json({ error: 'mode is required' });
   }
 
-  await clearSessionHistory(req.user.id, mode);
-  logger.info(`Chat history cleared — user: ${req.user.id}, mode: ${mode}`);
+  const userId = req.user?.id || 'demo';
+
+  await clearSessionHistory(userId, mode);
+  logger.info(`Chat history cleared — user: ${userId}, mode: ${mode}`);
 
   res.json({ success: true });
 });
@@ -178,7 +180,8 @@ router.get('/history', optionalAuth, async (req, res) => {
     return res.status(400).json({ error: 'mode query param is required' });
   }
 
-  const messages = await getHistory(req.user.id, mode);
+  const userId = req.user?.id || 'demo';
+  const messages = await getHistory(userId, mode);
   res.json({ messages });
 });
 
