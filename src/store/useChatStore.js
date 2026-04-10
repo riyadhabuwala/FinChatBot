@@ -22,6 +22,12 @@ const useChatStore = create(persist((set, get) => ({
   // Auth token (for API calls)
   authToken: null,
   setAuthToken: (token) => set({ authToken: token }),
+  user: null,
+  setUser: (user) => set({ user }),
+  
+  // History
+  agentRunHistory: [],
+  setAgentRunHistory: (runs) => set({ agentRunHistory: runs }),
 
   // Uploaded files — mock files loaded asynchronously if needed
   uploadedFiles: [],
@@ -113,6 +119,8 @@ const useChatStore = create(persist((set, get) => ({
   partialize: (state) => ({
     activeMode: state.activeMode,
     conversations: state.conversations,
+    authToken: state.authToken,
+    user: state.user,
   }),
 }));
 

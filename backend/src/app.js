@@ -10,6 +10,8 @@ import chatRoutes from './routes/chat.js';
 import uploadRoutes from './routes/upload.js';
 import insightsRoutes from './routes/insights.js';
 import agentRoutes from './routes/agent.js';
+import shareRoutes from './routes/share.js';
+import exportRoutes from './routes/export.js';
 import { isPythonAvailable } from './services/pythonClient.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
@@ -60,6 +62,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/share', shareRoutes);
+app.use('/api/export', exportRoutes);
 
 // Global error handler (must be last)
 app.use(errorHandler);

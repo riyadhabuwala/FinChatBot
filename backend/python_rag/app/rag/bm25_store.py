@@ -4,6 +4,7 @@ from rank_bm25 import BM25Okapi
 from app.config import settings
 from app.utils.file_utils import ensure_dir
 from app.utils.text_utils import tokenize
+from app.utils.index_backup import backup_index_file, restore_index_file
 
 
 def _bm25_path(user_id: str) -> Path:
@@ -20,6 +21,8 @@ def add_to_bm25(user_id: str, new_chunks: list[dict]):
     """Add chunks to BM25, replacing any existing chunks with the same file_id."""
     path = _bm25_path(user_id)
     all_chunks = []
+    if not path.exists():
+        restore_index_file(str(path), f"{user_id}/{user_id}.bm25.pkl")
     if path.exists():
         with open(path, "rb") as f:
             data = pickle.load(f)
@@ -46,11 +49,14 @@ def add_to_bm25(user_id: str, new_chunks: list[dict]):
     bm25 = build_bm25(all_chunks) if all_chunks else None
     with open(path, "wb") as f:
         pickle.dump({"chunks": all_chunks, "bm25": bm25}, f)
+    backup_index_file(str(path), f"{user_id}/{user_id}.bm25.pkl")
 
 
 def remove_file_from_bm25(user_id: str, file_id: str) -> int:
     """Remove all chunks belonging to a specific file_id. Returns count of removed chunks."""
     path = _bm25_path(user_id)
+    if not path.exists():
+        restore_index_file(str(path), f"{user_id}/{user_id}.bm25.pkl")
     if not path.exists():
         return 0
     with open(path, "rb") as f:
@@ -63,11 +69,14 @@ def remove_file_from_bm25(user_id: str, file_id: str) -> int:
     bm25 = build_bm25(filtered) if filtered else None
     with open(path, "wb") as f:
         pickle.dump({"chunks": filtered, "bm25": bm25}, f)
+    backup_index_file(str(path), f"{user_id}/{user_id}.bm25.pkl")
     return removed
 
 
 def search_bm25(user_id: str, query: str, file_ids: list[str], top_k: int) -> list[dict]:
     path = _bm25_path(user_id)
+    if not path.exists():
+        restore_index_file(str(path), f"{user_id}/{user_id}.bm25.pkl")
     if not path.exists():
         return []
     with open(path, "rb") as f:

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     index_dir: str = "./indexes"
     upload_dir: str = "../uploads"
     port: int = 8000
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
 
     class Config:
         env_file = ".env"

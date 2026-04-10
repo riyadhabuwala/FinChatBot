@@ -5,6 +5,7 @@ import faiss
 import numpy as np
 from app.config import settings
 from app.utils.file_utils import ensure_dir
+from app.utils.index_backup import backup_index_file, restore_index_file
 
 
 def _index_paths(user_id: str) -> tuple[Path, Path]:
@@ -17,7 +18,11 @@ def _index_paths(user_id: str) -> tuple[Path, Path]:
 def load_index(user_id: str):
     faiss_path, meta_path = _index_paths(user_id)
     if not faiss_path.exists() or not meta_path.exists():
-        return None, None
+        restored = restore_index_file(str(faiss_path), f"{user_id}/{user_id}.faiss")
+        if restored:
+            restore_index_file(str(meta_path), f"{user_id}/{user_id}.meta.pkl")
+        if not faiss_path.exists() or not meta_path.exists():
+            return None, None
     index = faiss.read_index(str(faiss_path))
     with open(meta_path, "rb") as f:
         metadata = pickle.load(f)
@@ -29,6 +34,8 @@ def save_index(user_id: str, index, metadata: list[dict]):
     faiss.write_index(index, str(faiss_path))
     with open(meta_path, "wb") as f:
         pickle.dump(metadata, f)
+    backup_index_file(str(faiss_path), f"{user_id}/{user_id}.faiss")
+    backup_index_file(str(meta_path), f"{user_id}/{user_id}.meta.pkl")
 
 
 def _rebuild_index(embeddings_list: list[list[float]], chunks: list[dict], dim: int = 384):

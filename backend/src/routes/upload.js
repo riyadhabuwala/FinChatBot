@@ -7,8 +7,8 @@ import { optionalAuth } from '../middleware/auth.js';
 import { uploadLimiter } from '../middleware/rateLimit.js';
 import { sanitizeFilename } from '../utils/fileValidator.js';
 import { logger } from '../utils/logger.js';
-import { addUploadedFile, getUploadedFiles, removeUploadedFile, updateUploadedFile } from '../services/sessionStore.js';
 import { ingestFile, deleteFromIndex } from '../services/pythonClient.js';
+import { saveFileMetadata, updateFileRagStatus, getUserFiles, deleteFileRecord, uploadFileToStorage, deleteFileFromStorage } from '../services/supabase.js';
 
 const router = Router();
 
@@ -71,30 +71,40 @@ router.post('/', optionalAuth, uploadLimiter, upload.array('files', 5), async (r
       const uuidMatch = file.filename.match(/^[0-9a-fA-F-]{36}/);
       const fileId = uuidMatch ? uuidMatch[0] : uuidv4();
       const absolutePath = path.resolve(file.path);
-      const fileMetadata = {
+      
+      const fileBuffer = fs.readFileSync(file.path);
+      const sanitizedFilename = sanitizeFilename(file.originalname);
+      const storagePath = `${userId}/${fileId}-${sanitizedFilename}`;
+      
+      let supabaseKey = null;
+      try {
+        supabaseKey = await uploadFileToStorage(fileBuffer, storagePath, file.mimetype);
+      } catch (err) {
+        logger.error(`Error uploading to Supabase Storage: ${err.message}`);
+      }
+      
+      await saveFileMetadata({
         id: fileId,
-        name: file.originalname,
-        size: file.size,
-        type: file.mimetype,
-        path: absolutePath,
-        ragProcessed: false,
-      };
+        userId,
+        originalName: file.originalname,
+        storedPath: file.path,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        supabaseKey,
+      });
 
-      await addUploadedFile(userId, fileMetadata);
       logger.info(`upload: saved file metadata with path=${absolutePath}`);
 
       // Attempt RAG ingestion (graceful if Python is down)
       const ingestionResult = await ingestFile(absolutePath, fileId, file.originalname, userId);
 
-      await updateUploadedFile(userId, fileId, {
-        ragProcessed: ingestionResult.status === 'ingested',
-        chunkCount: ingestionResult.chunk_count || 0,
-        status: ingestionResult.status,
-        message: ingestionResult.message,
+      await updateFileRagStatus(fileId, {
+        ragProcessed: ingestionResult?.status === 'ingested',
+        chunkCount: ingestionResult?.chunk_count || 0,
       });
 
-      if (ingestionResult.status !== 'ingested') {
-        logger.warn(`RAG ingestion not completed for ${file.originalname} (${fileId}): ${ingestionResult.message || ingestionResult.status}`);
+      if (ingestionResult?.status !== 'ingested') {
+        logger.warn(`RAG ingestion not completed for ${file.originalname} (${fileId})`);
       } else {
         logger.info(`RAG ingested ${ingestionResult.chunk_count || 0} chunks for ${file.originalname} (${fileId})`);
       }
@@ -104,10 +114,10 @@ router.post('/', optionalAuth, uploadLimiter, upload.array('files', 5), async (r
         name: file.originalname,
         size: file.size,
         type: file.mimetype,
-        ragProcessed: ingestionResult.status === 'ingested',
-        chunkCount: ingestionResult.chunk_count || 0,
-        status: ingestionResult.status,
-        message: ingestionResult.message,
+        ragProcessed: ingestionResult?.status === 'ingested',
+        chunkCount: ingestionResult?.chunk_count || 0,
+        status: ingestionResult?.status,
+        message: ingestionResult?.message,
       });
 
       logger.info(`File uploaded: ${file.originalname} (${fileId}) by user ${userId}`);
@@ -125,22 +135,35 @@ router.delete('/:fileId', optionalAuth, async (req, res, next) => {
     const userId = req.user?.id || 'demo';
     const { fileId } = req.params;
 
-    const files = await getUploadedFiles(userId);
+    const files = await getUserFiles(userId);
     const file = files.find(f => f.id === fileId);
 
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
     }
 
+    // Delete from Supabase Storage
+    if (file.supabase_key) {
+      try {
+        await deleteFileFromStorage(file.supabase_key);
+      } catch (err) {
+        logger.error(`Error deleting from Supabase Storage: ${err.message}`);
+      }
+    }
+
     // Delete from disk
-    if (file.path && fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
+    if (file.stored_path && fs.existsSync(file.stored_path)) {
+      try {
+        fs.unlinkSync(file.stored_path);
+      } catch (e) {
+        logger.error(`Failed to unlink local file ${file.stored_path}`);
+      }
     }
 
     // Delete from RAG indexes (graceful if Python is down)
     await deleteFromIndex(fileId, userId);
 
-    await removeUploadedFile(userId, fileId);
+    await deleteFileRecord(fileId, userId);
     logger.info(`File deleted: ${fileId} by user ${userId}`);
 
     res.json({ success: true });
@@ -150,18 +173,24 @@ router.delete('/:fileId', optionalAuth, async (req, res, next) => {
 });
 
 // GET /api/upload/files
-router.get('/files', optionalAuth, async (req, res) => {
-  const userId = req.user?.id || 'demo';
-  const files = (await getUploadedFiles(userId)).map(f => ({
-    id: f.id,
-    name: f.name,
-    size: f.size,
-    type: f.type,
-    ragProcessed: f.ragProcessed,
-    uploadedAt: f.uploadedAt,
-  }));
+router.get('/files', optionalAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id || 'demo';
+    const filesList = await getUserFiles(userId);
+    
+    const files = filesList.map(f => ({
+      id: f.id,
+      name: f.original_name,
+      size: f.file_size,
+      type: f.mime_type,
+      ragProcessed: f.rag_processed,
+      uploadedAt: f.uploaded_at,
+    }));
 
-  res.json({ files });
+    res.json({ files });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

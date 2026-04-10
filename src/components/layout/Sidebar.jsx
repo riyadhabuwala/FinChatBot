@@ -17,7 +17,7 @@ import { MODE_LIST, getModeById } from '../../constants/modes';
 import useChatStore from '../../store/useChatStore';
 import { useFileUpload } from '../../hooks/useFileUpload';
 import { Button } from '../ui/Button';
-
+import { useNavigate } from 'react-router-dom';
 const ICON_MAP = {
   MessageSquare,
   FileSearch,
@@ -41,9 +41,19 @@ function formatFileSize(bytes) {
 }
 
 export function Sidebar() {
-  const { activeMode, setActiveMode, uploadedFiles, setUploadModalOpen, isSidebarOpen, setSidebarOpen } =
+  const { activeMode, setActiveMode, uploadedFiles, setUploadModalOpen, isSidebarOpen, setSidebarOpen, user, authToken, setAuthToken, setUser, agentRunHistory } =
     useChatStore();
   const { removeFile: handleRemoveFile } = useFileUpload();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/logout`, { method: 'POST' });
+    } catch (e) {}
+    setAuthToken(null);
+    setUser(null);
+    navigate('/auth');
+  };
 
   return (
     <>
@@ -177,21 +187,54 @@ export function Sidebar() {
             </div>
           )}
 
+          {/* History */}
+          {isSidebarOpen && agentRunHistory?.length > 0 && (
+            <div className="px-2 py-3 border-t border-border-subtle overflow-y-auto max-h-[30%]">
+              <div className="flex items-center justify-between px-2 mb-2">
+                <span className="text-[10px] uppercase tracking-widest font-semibold text-text-muted">
+                  Agent History
+                </span>
+              </div>
+              <div className="space-y-1">
+                {agentRunHistory.slice(0, 5).map((run) => (
+                  <button
+                    key={run.id}
+                    className="w-full text-left group flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-bg-card/50 transition-colors"
+                    onClick={() => {
+                      setActiveMode('agentic');
+                      window.location.hash = `#run-${run.id}`; // Hacky way to trigger load without complex store changes or just do it via another way if needed
+                      // You'd ideally have an action to load the run.
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-text-primary truncate">
+                        {run.goal.length > 40 ? run.goal.substring(0, 40) + '...' : run.goal}
+                      </p>
+                      <p className="text-[10px] text-text-muted">{new Date(run.created_at).toLocaleDateString()}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* User section */}
           <div className="px-3 py-3 border-t border-border-subtle mt-auto">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-accent-teal/20 flex items-center justify-center shrink-0">
-                <span className="text-xs font-semibold text-accent-teal">DU</span>
+                <span className="text-xs font-semibold text-accent-teal">{user ? user.name.substring(0,2).toUpperCase() : 'DU'}</span>
               </div>
               {isSidebarOpen && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">Demo User</p>
-                    <p className="text-[10px] text-text-muted">Free Plan</p>
+                    <p className="text-sm font-medium text-text-primary truncate">{user ? user.name : 'Demo User'}</p>
+                    <p className="text-[10px] text-text-muted">{user ? user.email : 'Free Plan'}</p>
                   </div>
-                  <button className="text-text-muted hover:text-text-primary cursor-pointer" aria-label="Settings">
-                    <Settings size={16} />
-                  </button>
+                  {user ? (
+                    <button onClick={handleLogout} className="text-xs text-text-muted hover:text-text-primary cursor-pointer w-auto h-auto">Logout</button>
+                  ) : (
+                    <button onClick={() => navigate('/auth')} className="text-xs text-accent-teal hover:underline cursor-pointer w-auto h-auto">Login</button>
+                  )}
                 </>
               )}
             </div>

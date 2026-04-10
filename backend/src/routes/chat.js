@@ -7,7 +7,7 @@ import { initSSE, sendChunk, sendDone, sendError, keepAlive } from '../utils/sse
 import { logger } from '../utils/logger.js';
 import { streamChatResponse, SYSTEM_PROMPTS } from '../services/groq.js';
 import { retrieveContext, isPythonAvailable, ingestFile } from '../services/pythonClient.js';
-import { getHistory, addMessage, clearHistory as clearSessionHistory, getUploadedFiles, updateUploadedFile, addUploadedFile } from '../services/sessionStore.js';
+import { getOrCreateConversation, saveMessage, getConversationMessages, clearConversationMessages, updateConversationTitle, getUserFiles, saveFileMetadata, updateFileRagStatus } from '../services/supabase.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -20,9 +20,6 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
   const fileIds = fileIdsStr ? fileIdsStr.split(',').filter(Boolean) : [];
 
   logger.info(`Chat stream — user: ${userId}, mode: ${mode}, message length: ${message.length}`);
-  if (fileIds.length > 0) {
-    logger.info(`Chat stream fileIds (${fileIds.length}): ${fileIds.join(',')}`);
-  }
 
   // Set SSE headers
   initSSE(res, req);
@@ -37,17 +34,20 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
   });
 
   try {
+    const conversationId = await getOrCreateConversation(userId, mode);
+    
     // Get conversation history
-    const history = await getHistory(userId, mode);
+    const rawHistory = await getConversationMessages(conversationId) || [];
+    // Only pass last 10 messages for context window size constraints
+    const history = rawHistory.map(m => ({ role: m.role, content: m.content })).slice(-10);
 
     // Try to get RAG context from Python
     let context = '';
     let sources = [];
     const pythonUp = await isPythonAvailable();
-    logger.info(`Python RAG reachable: ${pythonUp}`);
 
     if (pythonUp && fileIds.length > 0) {
-      const files = await getUploadedFiles(userId);
+      const files = await getUserFiles(userId);
       const uploadsDir = process.env.UPLOAD_DIR || './uploads';
 
       const resolveUploadedFileFromDisk = (id) => {
@@ -60,10 +60,10 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
         const originalName = match.replace(`${id}-`, '') || match;
         return {
           id,
-          name: originalName,
-          size: stats.size,
-          type: '',
-          path: absolutePath,
+          original_name: originalName,
+          file_size: stats.size,
+          mime_type: '',
+          stored_path: absolutePath,
         };
       };
 
@@ -72,21 +72,25 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
         if (!file) {
           const resolved = resolveUploadedFileFromDisk(fileId);
           if (resolved) {
-            await addUploadedFile(userId, resolved);
+            await saveFileMetadata({
+              id: resolved.id,
+              userId,
+              originalName: resolved.original_name,
+              storedPath: resolved.stored_path,
+              fileSize: resolved.file_size,
+              mimeType: resolved.mime_type,
+              supabaseKey: null
+            });
             file = resolved;
-          } else {
-            logger.warn(`Chat stream could not resolve fileId on disk: ${fileId}`);
           }
         }
-        if (!file || file.ragProcessed || !file.path) continue;
-        const absolutePath = path.isAbsolute(file.path) ? file.path : path.resolve(file.path);
+        if (!file || file.rag_processed || !file.stored_path) continue;
+        const absolutePath = path.isAbsolute(file.stored_path) ? file.stored_path : path.resolve(file.stored_path);
         try {
-          const ingestResult = await ingestFile(absolutePath, fileId, file.name, userId);
-          await updateUploadedFile(userId, fileId, {
-            ragProcessed: ingestResult.status === 'ingested',
-            chunkCount: ingestResult.chunk_count || 0,
-            status: ingestResult.status,
-            message: ingestResult.message,
+          const ingestResult = await ingestFile(absolutePath, fileId, file.original_name, userId);
+          await updateFileRagStatus(fileId, {
+            ragProcessed: ingestResult?.status === 'ingested',
+            chunkCount: ingestResult?.chunk_count || 0,
           });
         } catch (err) {
           logger.warn(`Deferred ingestion failed for ${fileId}: ${err.message}`);
@@ -96,7 +100,6 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
       const ragResult = await retrieveContext(message, fileIds, mode, userId);
       context = ragResult.context || '';
       sources = ragResult.sources || [];
-      logger.info(`RAG retrieve: chunks=${ragResult.chunk_count || 0}, fallback=${!!ragResult.fallback}, reason=${ragResult.reason || 'n/a'}`);
       if (ragResult.fallback) {
         context = '';
       }
@@ -110,12 +113,22 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
       : '\n\nNo document context available. Answer from general financial knowledge and say so.');
     const messages = [
       { role: 'system', content: systemContent },
-      ...history.slice(-10),
+      ...history,
       { role: 'user', content: message },
     ];
 
+    // Auto-generate title from first message
+    if (rawHistory.length === 0) {
+      const title = message.length > 50 ? message.substring(0, 50) + '...' : message;
+      updateConversationTitle(conversationId, title).catch(e => logger.error(`Failed title gen: ${e.message}`));
+    }
+
     // Save user message to history
-    await addMessage(userId, mode, 'user', message);
+    await saveMessage({
+      conversationId,
+      role: 'user',
+      content: message,
+    });
 
     // Stream the response from Groq
     await streamChatResponse(
@@ -129,7 +142,13 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
       ({ fullText, citations, chartData }) => {
         if (!aborted) {
           // Save assistant response to history
-          addMessage(userId, mode, 'assistant', fullText).catch((err) => {
+          saveMessage({
+            conversationId,
+            role: 'assistant',
+            content: fullText,
+            citations: citations || [],
+            chartData: chartData || null
+          }).catch((err) => {
             logger.warn(`Failed to store assistant message: ${err.message}`);
           });
 
@@ -149,9 +168,7 @@ router.get('/stream', optionalAuth, chatLimiter, validateChat, async (req, res) 
     logger.error('Chat stream error:', err.message);
 
     if (err.message.includes('GROQ_API_KEY')) {
-      sendError(res, 'AI service not configured. Please add GROQ_API_KEY to the backend .env file.');
-    } else if (err.status === 429) {
-      sendError(res, 'AI rate limit reached. Please wait 60 seconds and try again.');
+      sendError(res, 'AI service not configured.');
     } else {
       sendError(res, `Chat error: ${err.message}`);
     }
@@ -167,7 +184,7 @@ router.post('/clear', optionalAuth, async (req, res) => {
 
   const userId = req.user?.id || 'demo';
 
-  await clearSessionHistory(userId, mode);
+  await clearConversationMessages(userId, mode);
   logger.info(`Chat history cleared — user: ${userId}, mode: ${mode}`);
 
   res.json({ success: true });
@@ -181,7 +198,8 @@ router.get('/history', optionalAuth, async (req, res) => {
   }
 
   const userId = req.user?.id || 'demo';
-  const messages = await getHistory(userId, mode);
+  const conversationId = await getOrCreateConversation(userId, mode);
+  const messages = await getConversationMessages(conversationId) || [];
   res.json({ messages });
 });
 

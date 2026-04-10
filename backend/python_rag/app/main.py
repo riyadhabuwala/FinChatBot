@@ -12,10 +12,8 @@ from app.rag.embedder import init_embedder
 async def lifespan(app):
     # Startup
     Path(settings.index_dir).mkdir(parents=True, exist_ok=True)
-    init_embedder()
-    print("Embedding model loaded")
     yield
-    # Shutdown (nothing needed)
+    # Shutdown
 
 
 app = FastAPI(title="FinChatBot RAG Engine", version="1.0.0", lifespan=lifespan)

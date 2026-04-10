@@ -9,8 +9,7 @@ import { getModeById } from '../../constants/modes';
 import useChatStore from '../../store/useChatStore';
 import { Button } from '../ui/Button';
 import { useChat } from '../../hooks/useChat';
-import { exportChatToPDF } from '../../utils/exportPDF';
-import { exportChatToMarkdown } from '../../utils/exportMarkdown';
+import { Share2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 const ICON_MAP = {
@@ -38,16 +37,37 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     setShowExport(false);
-    await exportChatToPDF(messages, mode);
-    addToast({ type: 'success', message: 'PDF exported successfully' });
+    window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/export/pdf?mode=${activeMode}`, '_blank');
   };
 
   const handleExportMarkdown = () => {
     setShowExport(false);
-    exportChatToMarkdown(messages, mode);
-    addToast({ type: 'success', message: 'Markdown exported successfully' });
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/export/markdown?mode=${activeMode}`;
+  };
+
+  const handleShare = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/share/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(useChatStore.getState().authToken ? {'Authorization': `Bearer ${useChatStore.getState().authToken}`} : {})
+        },
+        body: JSON.stringify({
+          linkType: 'conversation',
+          referenceId: messages.length > 0 ? messages[0].conversation_id : activeMode, // conversation ID logic is abstract, backend infers it from activeMode in fallback or we can just send activeMode and let backend find it
+          title: messages[0]?.content?.substring(0, 50) + '...'
+        })
+      });
+      if (!res.ok) throw new Error('Share link failed');
+      const data = await res.json();
+      navigator.clipboard.writeText(data.shareUrl);
+      addToast({ type: 'success', message: 'Share link copied to clipboard!' });
+    } catch (err) {
+      addToast({ type: 'error', message: err.message });
+    }
   };
 
   return (
@@ -80,6 +100,15 @@ export function TopBar() {
                 variant="ghost"
                 size="icon"
                 className="w-8 h-8"
+                onClick={handleShare}
+                aria-label="Share conversation"
+              >
+                <Share2 size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 cursor-pointer"
                 onClick={() => setShowExport(!showExport)}
                 aria-label="Export conversation"
               >
